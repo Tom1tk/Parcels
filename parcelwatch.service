@@ -1,0 +1,19 @@
+[Unit]
+Description=ParcelWatch (Gmail parcel tracker) on 0.0.0.0:8765
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=user
+Group=user
+WorkingDirectory=/home/user/parcelwatch
+Environment=PATH=/home/user/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/user/parcelwatch/run.sh
+Restart=always
+RestartSec=5
+TimeoutStopSec=15
+StandardOutput=append:/home/user/parcelwatch/data/server.log
+StandardError=inherit
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e9f3fb">
+  <script>
+    try { document.documentElement.dataset.theme = localStorage.getItem("theme") || "light"; } catch { document.documentElement.dataset.theme = "light"; }
+    addEventListener("DOMContentLoaded", () => document.querySelector('meta[name="theme-color"]').content = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim());
+  </script>
+  <link rel="preload" href="/static/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <title>Parcels</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <h1><svg class="logo" viewBox="0.5 1 23 23" aria-hidden="true" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5v7.5l8 4 8-4v-7.5l-8 4z" fill-opacity=".18"/><path d="M12 14.5v7.5M4 10.5l8-4 8 4" fill="none"/><path d="M4 10.5 1.5 6.5l8-4 2.5 4M20 10.5l2.5-4-8-4-2.5 4" fill="none"/></svg>Parcels</h1>
+      <button id="sync" class="sync" type="button" title="Sync status"><span class="dot"></span><span class="txt">Connecting…</span></button>
+    </div>
+    <nav id="filters" class="filters" aria-label="Filter parcels">
+      <button data-f="active" aria-pressed="true">Active <b></b></button>
+      <button data-f="problem">Problems <b></b></button>
+      <button data-f="delivered">Delivered <b></b></button>
+      <button data-f="all">All <b></b></button>
+    </nav>
+    <button id="open-settings" class="icon" type="button" aria-label="Settings">⚙</button>
+    <input id="q" class="search" type="search" placeholder="Search everything   /" aria-label="Search parcels" autocomplete="off" spellcheck="false">
+  </header>
+
+  <main>
+    <div id="notice" class="notice" hidden></div>
+    <section id="list" class="list" aria-live="polite"></section>
+  </main>
+
+  <dialog id="settings">
+    <form method="dialog" class="dlg-head"><h2>Settings</h2><button class="icon" aria-label="Close">✕</button></form>
+
+    <section>
+      <h3>1. Google OAuth client</h3>
+      <p id="client-status" class="muted"></p>
+      <label class="file">Upload client JSON <input id="client-file" type="file" accept=".json,application/json"></label>
+      <p class="muted small">Authorised redirect URI to add in Google Cloud: <code id="redirect-uri"></code></p>
+    </section>
+
+    <section>
+      <h3>2. Connect Gmail</h3>
+      <p id="gmail-status" class="muted"></p>
+      <a id="connect" class="btn" href="/auth/start">Connect Gmail</a>
+      <details class="small">
+        <summary>Redirect didn't come back here?</summary>
+        <p>Copy the full address from the browser bar after approving (even if the page failed to load) and paste it here:</p>
+        <form id="paste-form" class="row"><input name="url" placeholder="http://localhost:8765/auth/callback?code=…" required><button class="btn">Finish</button></form>
+      </details>
+    </section>
+
+    <section>
+      <h3>3. Tracking details (optional)</h3>
+      <p class="muted small">A <a href="https://api.17track.net" target="_blank" rel="noopener">17TRACK</a> API key adds carrier scans and delivery estimates for active parcels. Uses 1 quota per new tracking number.</p>
+      <form id="track-form" class="row"><input name="key" type="password" autocomplete="off" placeholder="17TRACK API key"><button class="btn">Save</button></form>
+      <p id="track-status" class="muted small"></p>
+    </section>
+
+    <section>
+      <h3>History</h3>
+      <form id="years-form" class="row">
+        <label>Search back <input name="years" type="number" min="1" max="20" inputmode="numeric"> years</label>
+        <button class="btn">Save &amp; search</button>
+      </form>
+      <p id="email-count" class="muted small"></p>
+      <button id="rebuild" class="btn ghost" type="button">Re-read stored emails</button>
+    </section>
+    <section>
+      <h3>Appearance</h3>
+      <div id="theme" class="theme" role="radiogroup" aria-label="Theme">
+        <label><input type="radio" name="theme" value="light"> Light</label>
+        <label><input type="radio" name="theme" value="dark"> Dark</label>
+        <label><input type="radio" name="theme" value="auto"> Match device</label>
+        <label><input type="radio" name="theme" value="eink"> E-ink</label>
+      </div>
+      <p class="sub-h">Dates</p>
+      <div id="dates" class="theme" role="radiogroup" aria-label="Dates">
+        <label><input type="radio" name="dates" value="relative"> Today / tomorrow</label>
+        <label><input type="radio" name="dates" value="date"> Always the date</label>
+      </div>
+      <p class="muted small">Saved on this device only. E-ink is black and white with no animation, and redraws as little as possible.</p>
+    </section>
+    <section>
+      <h3>Hidden parcels</h3>
+      <p id="hidden-none" class="muted small">None. Open a parcel and choose “Hide parcel” to take it off your lists.</p>
+      <details id="hidden-box">
+        <summary>Show hidden parcels (<span id="hidden-count">0</span>)</summary>
+        <ul id="hidden-list" class="hidden-list"></ul>
+      </details>
+    </section>
+    <p id="settings-msg" class="msg" role="status"></p>
+  </dialog>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
