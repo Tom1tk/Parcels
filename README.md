@@ -112,3 +112,7 @@ See [SPEC.md](SPEC.md) for the original requirements, and [PLAN.md](PLAN.md) for
 
 - [Manrope](https://github.com/davelab6/manrope) by Mikhail Sharanda, under the [SIL Open Font License](static/fonts/OFL.txt).
 - Built with [FastAPI](https://fastapi.tiangolo.com), [uv](https://docs.astral.sh/uv/) and the [Gmail API](https://developers.google.com/workspace/gmail/api).
+
+## Licence
+
+[MIT](LICENSE). Manrope keeps its own licence (OFL, above).
