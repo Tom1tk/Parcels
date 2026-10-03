@@ -62,8 +62,8 @@ Supported out of the box: Amazon, Royal Mail, Evri, DPD, Yodel, InPost, UPS, and
 You need Python 3.12+, [uv](https://docs.astral.sh/uv/), and a Google account.
 
 ```sh
-git clone https://github.com/Tom1tk/parcels.git
-cd parcels
+git clone https://github.com/Tom1tk/Parcels.git
+cd Parcels
 ./run.sh              # serves on http://0.0.0.0:8765
 ```
 
