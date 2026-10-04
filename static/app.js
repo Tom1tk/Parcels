@@ -52,7 +52,7 @@ let relativeDates = (() => { try { return localStorage.getItem("dates") !== "dat
 // "today", "tomorrow" or "yesterday" when Settings allows it, otherwise the date
 function day(d) {
   const days = Math.round((new Date(d.toDateString()) - new Date(new Date().toDateString())) / 864e5); // whole days, give or take a clock change
-  return (relativeDates && { "-1": "yesterday", 0: "today", 1: "tomorrow" }[days]) || fmtDay(d);
+  return (relativeDates && { "-1": "Yesterday", 0: "Today", 1: "Tomorrow" }[days]) || fmtDay(d);
 }
 function eta(iso) {
   const d = new Date(iso + "T00:00");
