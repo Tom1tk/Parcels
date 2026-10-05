@@ -7,7 +7,8 @@ import html
 import re
 import time
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import date, datetime, timedelta
+from statistics import median
 
 from .parse import CARRIERS, EXCEPTIONS, GENERIC_TRACK_URL, STAGES, base_domain, domain_of
 
@@ -18,6 +19,8 @@ STALE_DAYS = 21
 GLOBAL_ORDER_LEN = 10      # order numbers this long are unique enough to match across a shop's domains
 HINT_WINDOW_DAYS = 30      # a carrier email can join a shop order placed up to this long before it
 DAY_MS = 86_400_000
+TRANSIT_MIN_SAMPLES = 3     # past deliveries needed before their median becomes an estimate
+HANDED_OVER = ("dispatched", "with_carrier", "in_transit")
 
 
 class _UF:
@@ -155,7 +158,8 @@ def build(messages: list[dict], api: dict | None = None, now_ms: int | None = No
             if e["stage"] is None and (key := _custom_key(r, e["norm"])) in learned:
                 e["stage"] = key
     templates = _learn_templates(raw)
-    return sorted((_assemble(r, templates, learned, api, now_ms) for r in raw), key=_sort_key)
+    transit = _learn_transit(raw)
+    return sorted((_assemble(r, templates, learned, transit, api, now_ms) for r in raw), key=_sort_key)
 
 
 def _sort_key(s: dict) -> tuple:
@@ -203,7 +207,7 @@ def _learn_templates(raw) -> dict[str, list[str]]:
     return {g: [s for s, c in counts[g].items() if c / totals[g] >= TEMPLATE_MIN_SHARE] for g in totals}
 
 
-def _assemble(r, templates, learned, api, now_ms) -> dict:
+def _assemble(r, templates, learned, transit, api, now_ms) -> dict:
     events, msgs = r["events"], r["msgs"]
     hit = {}
     for e in events:
@@ -255,6 +259,10 @@ def _assemble(r, templates, learned, api, now_ms) -> dict:
         eta = None
     else:
         eta = api_eta or eta
+    guessed = not eta and status in ("active", "problem")
+    if guessed:
+        eta = _estimate(r, hit, transit)
+        guessed = bool(eta)
     # newest slot for that day wins: Evri's "delivery time has been updated" replaces the morning's estimate
     window = next(({k: w[k] for k in ("from", "to")} for m in reversed(msgs)
                    if (w := m["facts"].get("window")) and w["day"] == eta), None) if eta else None
@@ -276,6 +284,7 @@ def _assemble(r, templates, learned, api, now_ms) -> dict:
         "tracking": links,
         "orders": sorted({o for m in msgs for o in m["facts"]["orders"]}),
         "eta": eta,
+        "eta_guess": guessed,
         "window": window,
         "status": status,
         "current": notches[keys.index(current)]["label"] if current else "Update received",
@@ -286,6 +295,58 @@ def _assemble(r, templates, learned, api, now_ms) -> dict:
         "events": [{k: v for k, v in e.items() if k != "norm"} | {"label": _label(e["stage"], learned)}
                    for e in reversed(events)],
     }
+
+
+def _workdays(a: date, b: date) -> int:
+    """Delivery days after a, up to b. ponytail: Sundays off, bank holidays ignored."""
+    return sum((a + timedelta(i)).weekday() != 6 for i in range(1, (b - a).days + 1))
+
+
+def _add_workdays(a: date, n: int) -> date:
+    while n > 0:
+        a += timedelta(1)
+        n -= a.weekday() != 6
+    return a
+
+
+def _anchor(hit: dict) -> tuple[str, int] | None:
+    """When the courier got it, else when it was ordered."""
+    handed = [hit[s] for s in HANDED_OVER if s in hit]
+    if handed:
+        return "handed", min(handed)
+    return ("ordered", hit["ordered"]) if "ordered" in hit else None
+
+
+def _learn_transit(raw) -> dict[tuple, list[int]]:
+    """Working days from hand-over (or order) to the door, per shop and per carrier, from past deliveries."""
+    out = defaultdict(list)
+    for r in raw:
+        hit = {}
+        for e in r["events"]:
+            if e["stage"] in STAGES:
+                hit.setdefault(e["stage"], e["ts"])
+        if "delivered" not in hit:
+            continue
+        done = datetime.fromtimestamp(hit["delivered"] / 1000).date()
+        for anchor, ts in filter(None, [_anchor(hit), ("ordered", hit["ordered"]) if "ordered" in hit else None]):
+            for g in _groups_of(r["carrier"], r["merchant_dom"]):
+                out[(g, anchor)].append(_workdays(datetime.fromtimestamp(ts / 1000).date(), done))
+    return out
+
+
+def _estimate(r, hit, transit) -> str | None:
+    """Stated postage service from hand-over first, then the shop's then the carrier's usual time."""
+    if not (a := _anchor(hit)):
+        return None
+    anchor, ts = a
+    start = datetime.fromtimestamp(ts / 1000).date()
+    service = next((m["facts"].get("service_days") for m in reversed(r["msgs"]) if m["facts"].get("service_days")), None)
+    if service and anchor == "handed":
+        return _add_workdays(start, service).isoformat()
+    for g in reversed(_groups_of(r["carrier"], r["merchant_dom"])):
+        if len(days := transit.get((g, anchor), [])) >= TRANSIT_MIN_SAMPLES:
+            return _add_workdays(start, round(median(days))).isoformat()
+    return None
 
 
 def _day(ts_ms: int) -> str:

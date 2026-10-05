@@ -198,6 +198,16 @@ def _parse_day(s: str, sent: date) -> date | None:
     return None
 
 
+# Postage service -> working days from the courier having it to the door.
+SERVICES = [(r"tracked ?24|24 ?h(ou)?rs?\b|next[- ]day|1st class|first class", 1),
+            (r"tracked ?48|48 ?h(ou)?rs?\b|2nd class|second class", 2)]
+
+
+def find_service(text: str) -> int | None:
+    t = text.lower()
+    return next((days for pat, days in SERVICES if re.search(pat, t)), None)
+
+
 def find_eta(subject: str, text: str, sent: datetime) -> str | None:
     for source in (subject, text[:1500]):
         for m in _ETA_CONTEXT.finditer(source):
@@ -353,6 +363,7 @@ def parse(subject: str, sender: str, text: str, sent: datetime) -> dict | None:
         "orders": sorted(orders),
         "eta": find_eta(subject, text, sent),
         "window": find_window(subject, text, sent),
+        "service_days": find_service(blob),
         "title": item_title(subject),
         "items": find_items(text),
         "hint": merchant_hint(subject, sender, text, carrier),
