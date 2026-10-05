@@ -43,7 +43,7 @@ _RULES = [
     ("customs", r"\bcustoms\b|\bimport (processing|clearance)"),
     ("in_transit", r"in transit|on the move|(arrived|reached|departed|left) (at |the |our )?(\w+ )?(hub|depot|facility|sorting|delivery office|distribution)|at (our|the|a) (\w+ )?(hub|depot|sorting)|being sorted|(arriving|delivery|expected) tomorrow"),
     ("with_carrier", r"(we('ve| have)|has been) (got|received|collected) (your|the) (parcel|package|item)|picked up by|collected by (the )?(courier|carrier|driver)|courier has (received|collected) your|handed (over )?to (the )?(courier|carrier|royal mail|evri|dpd|ups|dhl|yodel|parcelforce)|accepted at|in our network"),
-    ("dispatched", r"\b(dispatched|shipped)\b|has been sent|is on (its|the) way|on its way|has left (our|the) (warehouse|store)|we('ve| have) sent"),
+    ("dispatched", r"\b(dispatched|despatched|shipped)\b|has been sent|is on (its|the) way|on its way|has left (our|the) (warehouse|store)|we('ve| have) sent"),
     ("label_created", r"label (created|printed)|shipping label|(we('ve| have)|has been) (been )?told|expecting your ([\w&.' ]{1,30} )?(parcel|package|item|order)|parcel loading|had news from|information received|pre-advice|delivery details (received|from)|will be (sent|handed) (to us|over)"),
     ("processing", r"\bpreparing\b|being prepared|\bpacked\b|being packed|(order|item)s? (is |are )?(being )?processed|getting your order ready|ready to ship|order (is )?in progress|shipment plan"),
     ("ordered", r"order (confirm|received|placed|acknowledg)|thank(s| you) for (your )?(order|purchase|shopping)|we('ve| have) (got|received) your order|your order (with|from|at|#|no|number)|purchase confirm|receipt for your order|^ordered\b|\bnew order\b"),
