@@ -157,3 +157,20 @@ def test_out_for_delivery_shows_the_newest_slot_for_that_day():
     ms.append(mail(1.7, "Your parcel has been delivered", evri, f"Tracking number {num}"))
     [s] = build(ms, now_ms=T0 + 2 * DAY)
     assert s["eta"] is None and s["window"] is None
+
+
+def test_estimate_from_postage_service_skips_sundays():
+    [s] = build([mail(11, "Your order has been dispatched", SHOP,
+                      "Order number: 777. Sent via Royal Mail Tracked 48, tracking number AB123456785GB")],
+                now_ms=T0 + 11 * DAY)  # handed over Saturday 12 September
+    assert s["eta"] == "2026-09-15" and s["eta_guess"]
+
+
+def test_estimate_from_past_deliveries_else_order_date():
+    past = [m for d, n in ((0, "AB123456785GB"), (7, "AB123456799GB"), (14, "AB123456808GB"))
+            for m in rm_journey(d, n, f"900{d:02}")]
+    new = mail(21, "Order confirmation #55501", SHOP, "Order number: 55501")
+    other = mail(21, "Order confirmation #55601", "Gift Shop <hi@gifts.co.uk>", "Order number: 55601")
+    by = {s["orders"][-1]: s for s in build(past + [new, other], now_ms=T0 + 21 * DAY)}
+    assert by["55501"]["eta"] == "2026-09-25" and by["55501"]["eta_guess"]  # this shop usually takes 3 days from the order
+    assert by["55601"]["eta"] is None  # nothing known about it: stays "Ordered"

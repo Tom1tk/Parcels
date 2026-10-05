@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from app.parse import classify, clean, find_eta, find_items, find_window, find_orders, find_tracking, item_title, parse
+from app.parse import classify, clean, find_eta, find_service, find_items, find_window, find_orders, find_tracking, item_title, parse
 
 SENT = datetime(2026, 10, 1, 9, 0)  # a Thursday
 
@@ -42,6 +42,12 @@ def test_classify(subject, body, stage):
 def test_progress_bar_in_body_tail_ignored():
     body = "Your order is being prepared. " + "x" * 700 + " Delivered"
     assert classify("Order update", body) == "processing"
+
+
+def test_postage_service():
+    assert find_service("Shipping: £ 2.85 via Tracked 48") == 2
+    assert find_service("Royal Mail 1st Class") == 1
+    assert find_service("Standard delivery") is None
 
 
 def test_tracking_numbers():

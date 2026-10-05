@@ -54,9 +54,9 @@ function day(d) {
   const days = Math.round((new Date(d.toDateString()) - new Date(new Date().toDateString())) / 864e5); // whole days, give or take a clock change
   return (relativeDates && { "-1": "Yesterday", 0: "Today", 1: "Tomorrow" }[days]) || fmtDay(d);
 }
-function eta(iso) {
+function eta(iso, guess) {
   const d = new Date(iso + "T00:00");
-  return `${iso < new Date().toLocaleDateString("en-CA") ? "Expected" : "Arriving"} ${day(d)}`;
+  return `${iso < new Date().toLocaleDateString("en-CA") ? "Expected" : guess ? "Estimated" : "Arriving"} ${day(d)}`;
 }
 
 // ---------- rendering ----------
@@ -81,7 +81,7 @@ function timeline(s) {
 
 function when(s) {
   if (s.eta && FILTERS.active(s)) {
-    const t = eta(s.eta);
+    const t = eta(s.eta, s.eta_guess);
     const upcoming = s.eta >= new Date().toLocaleDateString("en-CA"); // a slot for a day gone by is no help
     return `<span class="w-k">${esc(t.split(" ")[0])}</span><span class="w-d">${esc(t.split(" ").slice(1).join(" "))}</span>${
       s.window && upcoming ? `<span class="w-t">${esc(slot(s.window))}</span>` : ""}`;
@@ -126,7 +126,7 @@ const fold = (s) => String(s ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g
 function indexShipments() {
   haystacks = new Map(data.shipments.map((s) => [s.id, fold([
     s.title, s.items.join(" "), s.merchant, s.carrier, STATUS[s.status], s.current,
-    s.eta && `${s.eta} ${eta(s.eta)}`, s.window && slot(s.window), fmtFull(s.started), s.orders.join(" "),
+    s.eta && `${s.eta} ${eta(s.eta, s.eta_guess)}`, s.window && slot(s.window), fmtFull(s.started), s.orders.join(" "),
     s.tracking.map((t) => t.number).join(" "), s.notches.map((n) => n.label).join(" "),
     s.exceptions.map((x) => x.label).join(" "),
     s.events.map((e) => `${e.label} ${e.subject} ${e.snippet ?? ""} ${e.sender ?? ""} ${e.location ?? ""}`).join(" "),

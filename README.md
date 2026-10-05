@@ -20,6 +20,7 @@ Parcels reads your inbox (read-only) and finds the emails about orders and deliv
 - **One timeline per parcel.** Shop emails and courier emails are joined by order number, tracking number or email thread. The steps fill in from left to right.
 - **Learns each carrier's steps.** If Royal Mail always sends "at the delivery office" before "delivered", future Royal Mail parcels show that step ahead of time.
 - **Arrival day and delivery slot.** "Arriving today 2:30–6:30pm", "tomorrow", "by 5pm". When a courier emails a new slot, the newest one wins.
+- **Estimates when nobody says.** With no date from the shop or courier, the arrival day is worked out from the postage service ("Tracked 48" = two working days after dispatch), or else from how long that shop or courier usually takes, based on your past deliveries.
 - **Problems stand out.** Missed deliveries, delays, returns, fees to pay and lost parcels get a flag on the timeline and appear under the Problems tab.
 - **Search everything.** Item names, shops, couriers, tracking and order numbers, all searchable instantly. Press `/` to start.
 - **Rename and hide.** Some parcels only come with a courier's email (a Vinted buy is just "Evri"), so you can give any parcel your own name, or hide it. Both survive re-parsing.
