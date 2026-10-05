@@ -13,6 +13,7 @@ SENT = datetime(2026, 10, 1, 9, 0)  # a Thursday
     ('Out for delivery: "Anker USB-C Cable"', "Ordered Shipped Out for delivery Delivered", "out_for_delivery"),
     ('Delivered: "Anker USB-C Cable"', "Ordered Shipped Out for delivery Delivered", "delivered"),
     ("Your Royal Mail item is on its way", "", "dispatched"),
+    ("Note added to your order", "Your order has been despatched via Royal Mail Tracked 48", "dispatched"),
     ("Your parcel is coming today", "", "out_for_delivery"),
     ("Your Evri parcel has been delivered", "", "delivered"),
     ("We've got your parcel", "Evri has your parcel from ASOS", "with_carrier"),
