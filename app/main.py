@@ -44,7 +44,8 @@ def set_sync(**kw) -> None:
 
 def rebuild() -> None:
     msgs = [m | {"facts": json.loads(m["facts"])} for m in db.all_messages() if m["facts"]]
-    state["shipments"] = apply_owner(build(msgs, db.api_data()), db.get("names", {}), set(db.get("hidden", [])))
+    state["shipments"] = apply_owner(build(msgs, db.api_data(), marked=db.get("delivered", {})),
+                                     db.get("names", {}), set(db.get("hidden", [])))
     state["version"] += 1
     publish("shipments")
 
@@ -242,6 +243,16 @@ def hide(sid: str, body: dict = Body(...)):
     ids = {e["id"] for e in _shipment(sid)["events"] if e.get("id")}
     kept = [i for i in db.get("hidden", []) if i not in ids]
     db.put("hidden", kept + ([sid] if body.get("hidden") else []))
+    rebuild()
+    return {"ok": True}
+
+
+@app.post("/api/shipments/{sid}/delivered")
+def mark_delivered(sid: str, body: dict = Body(...)):
+    """{"delivered": true} for a parcel that came without a delivered email; false undoes it."""
+    ids = {e["id"] for e in _shipment(sid)["events"] if e.get("id")}
+    kept = {k: v for k, v in db.get("delivered", {}).items() if k not in ids}
+    db.put("delivered", kept | ({sid: int(time.time() * 1000)} if body.get("delivered") else {}))
     rebuild()
     return {"ok": True}
 

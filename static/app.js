@@ -103,7 +103,7 @@ function card(s) {
   const events = s.events.map((e) => `<li>
       <time>${esc(fmtFull(e.ts))}</time>
       <span class="ev-stage">${esc(e.label)}</span>
-      <span class="ev-text">${e.source === "email"
+      <span class="ev-text">${e.source === "owner" ? `${esc(e.subject)} <small>By you, in Parcels</small>` : e.source === "email"
         ? `<a href="https://mail.google.com/mail/u/0/#all/${esc(e.id)}" target="_blank" rel="noopener">${esc(e.subject)}</a><small>${esc(e.snippet)}</small>`
         : `${esc(e.subject)}${e.location ? ` <small>${esc(e.location)}</small>` : ""} <small>· carrier scan</small>`}</span></li>`).join("");
   const chip = active.length ? active[active.length - 1].label : STATUS[s.status] || s.status;
@@ -115,7 +115,7 @@ function card(s) {
     </header>
     ${timeline(s)}</summary>
     <div class="log">
-      <div class="actions"><button type="button" class="link" data-act="rename">Rename</button>${s.original_title ? `<button type="button" class="link" data-act="reset">Reset name</button>` : ""}<button type="button" class="link" data-act="hide">Hide parcel</button><span class="msg" role="status"></span></div>
+      <div class="actions"><button type="button" class="link" data-act="rename">Rename</button>${s.original_title ? `<button type="button" class="link" data-act="reset">Reset name</button>` : ""}${s.marked_delivered ? `<button type="button" class="link" data-act="undeliver">Not delivered</button>` : s.status !== "delivered" ? `<button type="button" class="link" data-act="deliver">Mark delivered</button>` : ""}<button type="button" class="link" data-act="hide">Hide parcel</button><span class="msg" role="status"></span></div>
       <form class="rename-form" hidden><input name="title" value="${esc(s.title)}" maxlength="120" required aria-label="Parcel name">
         <button class="btn">Save</button><button type="button" class="btn ghost" data-act="cancel">Cancel</button><span class="msg" role="status"></span></form>
       ${s.items.length > 1 ? `<ul class="items">${s.items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>` : ""}<ol>${events}</ol></div></details>`;
@@ -321,6 +321,8 @@ $("#list").addEventListener("click", (e) => {
   if (act === "rename") renameEditor(el, true);
   if (act === "cancel") renameEditor(el, false);
   if (act === "reset") saveName(el, "");
+  if (act === "deliver" || act === "undeliver") post(`/api/shipments/${encodeURIComponent(el.dataset.id)}/delivered`, { delivered: act === "deliver" })
+    .then(load).catch((err) => ($(".actions .msg", el).textContent = err.message || "Couldn't save that. Try again."));
   if (act === "hide") setHidden(el.dataset.id, true).catch((err) => ($(".actions .msg", el).textContent = err.message || "Couldn't hide it. Try again."));
 });
 $("#list").addEventListener("submit", (e) => {
