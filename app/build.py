@@ -138,8 +138,10 @@ def _rank(stage: str, learned: dict) -> float:
     return STAGES[stage][0] if stage in STAGES else learned[stage]["rank"]
 
 
-def build(messages: list[dict], api: dict | None = None, now_ms: int | None = None) -> list[dict]:
-    api = api or {}
+def build(messages: list[dict], api: dict | None = None, now_ms: int | None = None,
+          marked: dict[str, int] | None = None) -> list[dict]:
+    """marked: email id -> when the owner said that parcel arrived, for deliveries nobody emailed about."""
+    api, marked = api or {}, marked or {}
     now_ms = now_ms or int(time.time() * 1000)
     raw = []
     for msgs in group(messages):
@@ -150,7 +152,9 @@ def build(messages: list[dict], api: dict | None = None, now_ms: int | None = No
         merchant, merchant_dom = _merchant(msgs)
         merchant = merchant or next((m["facts"]["hint"] for m in msgs if m["facts"]["hint"]), "")
         raw.append({"msgs": msgs, "tracking": tracking, "carrier": carrier, "merchant": merchant,
-                    "merchant_dom": merchant_dom, "events": _events(msgs, api, list(tracking))})
+                    "merchant_dom": merchant_dom, "events": sorted(_events(msgs, api, list(tracking)) + [
+                        {"ts": marked[m["id"]], "stage": "delivered", "source": "owner", "subject": "Marked as delivered", "norm": ""}
+                        for m in msgs if m["id"] in marked], key=lambda e: e["ts"])})
 
     learned = _learn_custom(raw)
     for r in raw:
@@ -285,6 +289,7 @@ def _assemble(r, templates, learned, transit, api, now_ms) -> dict:
         "orders": sorted({o for m in msgs for o in m["facts"]["orders"]}),
         "eta": eta,
         "eta_guess": guessed,
+        "marked_delivered": any(e["source"] == "owner" for e in events),
         "window": window,
         "status": status,
         "current": notches[keys.index(current)]["label"] if current else "Update received",
@@ -323,7 +328,7 @@ def _learn_transit(raw) -> dict[tuple, list[int]]:
     for r in raw:
         hit = {}
         for e in r["events"]:
-            if e["stage"] in STAGES:
+            if e["stage"] in STAGES and e["source"] != "owner":  # a click days later isn't a delivery time
                 hit.setdefault(e["stage"], e["ts"])
         if "delivered" not in hit:
             continue

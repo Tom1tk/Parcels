@@ -174,3 +174,13 @@ def test_estimate_from_past_deliveries_else_order_date():
     by = {s["orders"][-1]: s for s in build(past + [new, other], now_ms=T0 + 21 * DAY)}
     assert by["55501"]["eta"] == "2026-09-25" and by["55501"]["eta_guess"]  # this shop usually takes 3 days from the order
     assert by["55601"]["eta"] is None  # nothing known about it: stays "Ordered"
+
+
+def test_owner_can_mark_a_parcel_delivered():
+    ms = [mail(0, 'Ordered: "Carpet tape"', AMZ, "Order # 205-1234567-0000001"),
+          mail(1, 'Dispatched: "Carpet tape"', AMZ, "Order # 205-1234567-0000001")]
+    [s] = build(ms, now_ms=T0 + 5 * DAY, marked={ms[0]["id"]: T0 + 4 * DAY})
+    assert s["status"] == "delivered" and s["marked_delivered"] and s["eta"] is None
+    assert s["notches"][-1] == {"key": "delivered", "label": "Delivered", "ts": T0 + 4 * DAY, "reached": True, "current": True}
+    [s] = build(ms, now_ms=T0 + 5 * DAY)
+    assert s["status"] == "active" and not s["marked_delivered"]
