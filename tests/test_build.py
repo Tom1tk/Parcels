@@ -184,3 +184,19 @@ def test_owner_can_mark_a_parcel_delivered():
     assert s["notches"][-1] == {"key": "delivered", "label": "Delivered", "ts": T0 + 4 * DAY, "reached": True, "current": True}
     [s] = build(ms, now_ms=T0 + 5 * DAY)
     assert s["status"] == "active" and not s["marked_delivered"]
+
+
+def test_parcels_the_owner_posts_and_seller_chat_stay_out():
+    EBAY = "eBay <ebay@ebay.com>"
+    bought = [mail(0, "Order confirmed: Desk lamp", EBAY, "Order number: 11-22222-33333"),
+              mail(2, "Order update: Desk lamp", EBAY, "Your item has been dispatched. Order number: 11-22222-33333. Royal Mail tracking number AB123456785GB")]
+    assert parse("seller_123 sent a message about Desk lamp #100000000001", "eBay - seller_123 <x@members.ebay.example>",
+                 "Sorry for the delay, posting it tomorrow. Order number: 11-22222-33333", datetime(2026, 9, 2)) is None
+    sold = [mail(1, "Your postage label is ready", "eBay <ebay@ebay.co.uk>",
+                 "Your buyer has paid. Service Standard tracked delivery via Royal Mail Tracking AB123456799GB Order number 22-44444-55555"),
+            mail(2, "Your parcel has been dropped off at a parcel locker", RM,
+                 "Your parcel AB123456799GB has been dropped off at our Royal Mail Parcel Locker today"),
+            mail(3, "Your parcel has been dropped off at a parcel locker", RM,  # a sale with no label email
+                 "Your parcel AB123456808GB has been dropped off at our Royal Mail Parcel Locker today")]
+    [s] = build(bought + sold, now_ms=T0 + 3 * DAY)
+    assert s["tracking"][0]["number"] == "AB123456785GB" and not s["exceptions"]

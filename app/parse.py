@@ -69,6 +69,10 @@ NON_PARCEL_DOMAINS = {
     "battle.net", "blizzard.com", "steampowered.com", "nintendo.com", "nintendo.co.uk", "gameboost.com", "greeneking.co.uk",
 }
 GENERIC_TRACK_URL = "https://t.17track.net/en#nums={n}"
+# Chat between buyer and seller: "sorry for the delay" there is small talk, not a courier status.
+_CHAT = re.compile(r"\bsent (you )?a (message|question) about\b|has sent a question", re.I)
+# The owner is the sender: a sale, its postage label, or the courier confirming the owner's drop-off.
+_OUTGOING = re.compile(r"\byour buyer\b|you made the sale|postage label is ready|thanks for dropping off|dropped off at our [\w ]{0,30}locker", re.I)
 
 # (carrier, regex). Bare-digit formats are only trusted near the word "tracking".
 _TRACKING = [
@@ -344,7 +348,7 @@ def is_shipping(stage, tracking, orders, carrier, sender) -> bool:
 
 def parse(subject: str, sender: str, text: str, sent: datetime) -> dict | None:
     """Facts for one email, or None if it isn't about a delivery."""
-    if base_domain(domain_of(sender)) in NON_PARCEL_DOMAINS:
+    if base_domain(domain_of(sender)) in NON_PARCEL_DOMAINS or _CHAT.search(subject):
         return None
     text = clean(text)
     blob = f"{subject}\n{text}"
@@ -353,9 +357,11 @@ def parse(subject: str, sender: str, text: str, sent: datetime) -> dict | None:
     stage = classify(subject, text)
     carrier = find_carrier(sender, text, tracking)
     strong = is_shipping(stage, tracking, orders, carrier, sender)
-    if not strong and not stage:
+    outgoing = bool(_OUTGOING.search(f"{subject}\n{text[:1500]}"))
+    if not strong and not stage and not outgoing:
         return None
     return {
+        "outgoing": outgoing,  # build drops every parcel sharing an id with these
         "weak": not strong,  # stage only, no ids: kept only if its thread is a known shipment
         "stage": stage,  # None = carrier email we can't classify yet ("update")
         "carrier": carrier,

@@ -143,8 +143,9 @@ def build(messages: list[dict], api: dict | None = None, now_ms: int | None = No
     """marked: email id -> when the owner said that parcel arrived, for deliveries nobody emailed about."""
     api, marked = api or {}, marked or {}
     now_ms = now_ms or int(time.time() * 1000)
+    sent = {k for m in messages if m["facts"].get("outgoing") for k in _keys(m)}  # parcels the owner posted
     raw = []
-    for msgs in group(messages):
+    for msgs in group([m for m in messages if sent.isdisjoint(_keys(m))]):
         tracking = {}
         for m in msgs:
             tracking.update({k: v for k, v in m["facts"]["tracking"].items() if v or k not in tracking})
