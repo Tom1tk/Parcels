@@ -18,6 +18,7 @@ KEY_MAX_MESSAGES = 25      # an id on more emails than this is boilerplate, not 
 STALE_DAYS = 21
 GLOBAL_ORDER_LEN = 10      # order numbers this long are unique enough to match across a shop's domains
 HINT_WINDOW_DAYS = 30      # a carrier email can join a shop order placed up to this long before it
+SAME_MOMENT_MS = 15 * 60_000  # Vinted's "confirmation needed" lands seconds after the courier's "delivered"
 DAY_MS = 86_400_000
 TRANSIT_MIN_SAMPLES = 3     # past deliveries needed before their median becomes an estimate
 HANDED_OVER = ("dispatched", "with_carrier", "in_transit")
@@ -48,15 +49,19 @@ def group(messages: list[dict]) -> list[list[dict]]:
     """messages: dicts with id, thread_id, ts, sender, facts. Returns groups, each sorted by ts."""
     msgs = sorted(messages, key=lambda m: m["ts"])
     counts = Counter(k for m in msgs for k in set(_keys(m)))
-    uf, keys_of, thread_last = _UF(), {}, {}
+    uf, keys_of, thread_last, titled = _UF(), {}, {}, {}
     for m in msgs:
         keys = [k for k in _keys(m) if counts[k] <= KEY_MAX_MESSAGES]
-        if not keys:  # no ids: ride along with the latest identified email in the thread
-            if m["facts"]["weak"] and m["thread_id"] not in thread_last:
+        named = (base_domain(domain_of(m["sender"])), _slug(m["facts"]["title"] or ""))
+        if not keys:  # no ids: ride along with the latest identified email in the thread, or the shop's order of that item
+            key = thread_last.get(m["thread_id"]) or (named[1] and titled.get(named))
+            if m["facts"]["weak"] and not key:
                 continue
-            keys = [thread_last.get(m["thread_id"], f"h:{m['thread_id']}")]
+            keys = [key or f"h:{m['thread_id']}"]
         else:
             thread_last[m["thread_id"]] = keys[0]
+            if named[1]:
+                titled[named] = keys[0]
         for k in keys[1:]:
             uf.union(k, keys[0])
         keys_of[m["id"]] = keys[0]
@@ -71,25 +76,47 @@ def _slug(s: str) -> str:
     return re.sub(r"[^a-z0-9]", "", s.lower())
 
 
+def _delivered_at(g: list[dict]) -> int | None:
+    return next((m["ts"] for m in g if m["facts"]["stage"] == "delivered"), None)
+
+
 def _attach_hinted(groups: list[list[dict]]) -> list[list[dict]]:
-    """A carrier-only group ("your parcel from Inkwell Cards") joins the latest matching shop order before it."""
-    shops = [(g, _slug(name), _slug(dom)) for g in groups for name, dom in [_merchant(g)] if name]
-    out = []
+    """A carrier-only group ("your parcel from Inkwell Cards") joins a matching shop order placed before it: the one
+    the shop marked delivered at the same moment, else the oldest still waiting, else the latest.
+    ponytail: "oldest still waiting" is a guess while several orders from one shop are on their way (four Vinted buys);
+    the carrier emails don't say which item is inside. The delivery-moment match corrects it once they land."""
+    shops = [(g, _slug(name), _slug(dom), _slug(dom.split(".")[0])) for g in groups for name, dom in [_merchant(g)] if name]
+    out, hinted, claimed = [], [], set()
     for g in groups:
         hint = _slug(next((m["facts"]["hint"] or "" for m in g if m["facts"]["hint"]), ""))
         if len(hint) < 3 or _merchant(g)[0]:
             out.append(g)
             continue
         start = g[0]["ts"]
-        match = [sg for sg, name, dom in shops
-                 if (hint in name or name in hint or hint in dom)
-                 and start - HINT_WINDOW_DAYS * DAY_MS <= sg[0]["ts"] <= start]
-        if match:
-            target = max(match, key=lambda sg: sg[0]["ts"])
-            target.extend(g)
-            target.sort(key=lambda m: m["ts"])
+        hinted.append((g, [sg for sg, name, dom, brand in shops
+                           if (hint in name or name in hint or hint in dom or (len(brand) >= 3 and brand in hint))
+                           and start - HINT_WINDOW_DAYS * DAY_MS <= sg[0]["ts"] <= start]))
+
+    def take(g, target):
+        claimed.add(id(target))
+        target.extend(g)
+        target.sort(key=lambda m: m["ts"])
+
+    rest = []
+    for g, match in hinted:
+        d = _delivered_at(g)
+        same = [sg for sg in match if d and id(sg) not in claimed and (s := _delivered_at(sg)) and abs(s - d) <= SAME_MOMENT_MS]
+        if same:
+            take(g, same[0])
         else:
+            rest.append((g, match))
+    for g, match in sorted(rest, key=lambda x: x[0][0]["ts"]):
+        if not match:
             out.append(g)
+            continue
+        free = [sg for sg in match if id(sg) not in claimed and not any(
+            m["facts"]["tracking"] or m["facts"]["stage"] == "delivered" or EXCEPTIONS.get(m["facts"]["stage"], ("", False))[1] for m in sg)]
+        take(g, min(free, key=lambda sg: sg[0]["ts"]) if free else max(match, key=lambda sg: sg[0]["ts"]))
     return out
 
 

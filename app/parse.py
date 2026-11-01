@@ -31,13 +31,13 @@ EXCEPTIONS = {
 # "delivered" wins over "dispatched" in "your dispatched parcel was delivered".
 _RULES = [
     ("cancelled", r"\b(order|item|parcel|delivery|shipment)s?( [#\w-]*\d[\w-]*)? (has been |was |is )?cancell?ed|\bcancell?ation (confirm|of)|^cancell?ed\b"),
-    ("returned", r"returned to (the )?sender|being returned|return(ing)? to sender|\breturn (received|processed|has been received)|we('ve| have) received your return|refund (issued|processed)|has been refunded"),
+    ("returned", r"returned to (the )?sender|being returned|return(ing)? to sender|\breturn (received|processed|has been received)|we('ve| have) received your return|refund (issued|processed)|has been refunded|^your refund for"),
     ("lost", r"\blost in transit|(parcel|package|item|order) (is |has been |was )?(lost|missing)|unable to locate|can(no|')t find your"),
-    ("damaged", r"\bdamaged\b"),
+    ("damaged", r"\bdamaged\b(?!,? or\b)"),  # not "if it wasn't delivered, is damaged, or ..."
     ("failed_attempt", r"missed you|couldn'?t deliver|could not deliver|unable to deliver|(delivery )?attempt(ed)? (to deliver|delivery|was made)|we tried to deliver|delivery (was )?unsuccessful|not able to deliver"),
     ("action_required", r"(fee|charge|duty|vat|postage) (to pay|is due|owed|outstanding)|pay (the |a )?(fee|charge|duty|customs)|action required|(confirm|update) (your )?address|more postage"),
     ("delayed", r"\bdelay(ed)?\b|running late|taking longer|later than expected|is late\b"),
-    ("delivered", r"^delivered\b|has been delivered|was delivered|been successfully delivered|we('ve| have) delivered|(?<!be )(?<!not )delivered (to|today|at|in|safely)|left (it |your \w+ )?(in|at|with) (your |a |the )?(safe ?place|porch|neighbou?r|reception|mailbox|letterbox|front door|parcel box)|has arrived\b(?! at)|\bcollected (by you|from)|you('ve| have) collected|successfully collected|now in your hands"),
+    ("delivered", r"^delivered\b|has been delivered|marked as delivered|was delivered|been successfully delivered|we('ve| have) delivered|(?<!be )(?<!not )delivered (to|today|at|in|safely)|left (it |your \w+ )?(in|at|with) (your |a |the )?(safe ?place|porch|neighbou?r|reception|mailbox|letterbox|front door|parcel box)|has arrived\b(?! at)|\bcollected (by you|from)|you('ve| have) collected|successfully collected|now in your hands"),
     ("ready_for_collection", r"(?<!when it's )(?<!when it is )(?<!when your parcel is )(?<!when your item is )ready (for|to) (collect|pick ?up)|ready for collection|available (for|to) (collect|pick ?up)|waiting (for you )?at (the |your |a )?(parcel ?shop|locker|post office|pickup|collection)|at your (chosen )?(locker|pick ?up point|parcel ?shop)"),
     ("out_for_delivery", r"out for delivery|^arriving today|is (coming|arriving) today|will be (delivered|with you) today|(delivery|arrives?) today|on (its|the) way to you today|with (our|your|the) driver|on the van|(your )?\d+[- ]hour (delivery )?window|driver is (nearby|on (their|the) way)"),
     ("customs", r"\bcustoms\b|\bimport (processing|clearance)"),
@@ -46,7 +46,7 @@ _RULES = [
     ("dispatched", r"\b(dispatched|despatched|shipped)\b|has been sent|is on (its|the) way|on its way|has left (our|the) (warehouse|store)|we('ve| have) sent"),
     ("label_created", r"label (created|printed)|shipping label|(we('ve| have)|has been) (been )?told|expecting your ([\w&.' ]{1,30} )?(parcel|package|item|order)|parcel loading|had news from|information received|pre-advice|delivery details (received|from)|will be (sent|handed) (to us|over)"),
     ("processing", r"\bpreparing\b|being prepared|\bpacked\b|being packed|(order|item)s? (is |are )?(being )?processed|getting your order ready|ready to ship|order (is )?in progress|shipment plan"),
-    ("ordered", r"order (confirm|received|placed|acknowledg)|thank(s| you) for (your )?(order|purchase|shopping)|we('ve| have) (got|received) your order|your order (with|from|at|#|no|number)|purchase confirm|receipt for your order|^ordered\b|\bnew order\b"),
+    ("ordered", r"order (confirm|received|placed|acknowledg)|thank(s| you) for (your )?(order|purchase|shopping)|we('ve| have) (got|received) your order|your order (with|from|at|#|no|number)|purchase confirm|receipt for your order|purchase receipt|^ordered\b|\bnew order\b"),
 ]
 _RULES = [(k, re.compile(p, re.I | re.M)) for k, p in _RULES]
 
@@ -66,13 +66,13 @@ CARRIERS = {
 # Senders whose "orders" are payments, food or digital goods, never parcels.
 NON_PARCEL_DOMAINS = {
     "paypal.com", "paypal.co.uk", "deliveroo.co.uk", "deliveroo.com", "just-eat.co.uk", "uber.com",
-    "battle.net", "blizzard.com", "steampowered.com", "nintendo.com", "nintendo.co.uk", "gameboost.com", "greeneking.co.uk",
+    "battle.net", "blizzard.com", "steampowered.com", "nintendo.com", "nintendo.co.uk", "gameboost.com", "greeneking.co.uk", "thetrainline.com",
 }
 GENERIC_TRACK_URL = "https://t.17track.net/en#nums={n}"
 # Chat between buyer and seller: "sorry for the delay" there is small talk, not a courier status.
 _CHAT = re.compile(r"\bsent (you )?a (message|question) about\b|has sent a question", re.I)
 # The owner is the sender: a sale, its postage label, or the courier confirming the owner's drop-off.
-_OUTGOING = re.compile(r"\byour buyer\b|you made the sale|postage label is ready|thanks for dropping off|dropped off at our [\w ]{0,30}locker", re.I)
+_OUTGOING = re.compile(r"\byour buyer\b|you made the sale|you(['’]ve| have) sold|shipping label is attached|postage label is ready|thanks for dropping off|dropped off at our [\w ]{0,30}locker", re.I)
 
 # (carrier, regex). Bare-digit formats are only trusted near the word "tracking".
 _TRACKING = [
@@ -89,7 +89,7 @@ _CONTEXT_TRACKING = re.compile(
     re.I,
 )
 _ORDER = re.compile(
-    r"\b(\d{3}-\d{7}-\d{7})\b|order\s*(?:number|no\.?|id|ref(?:erence)?|#)\s*[:#]?\s*#?([A-Z0-9][A-Z0-9-]{3,24})\b|order\s*#\s*([A-Z0-9-]{4,25})\b|#(\d{5,12})\b",
+    r"\b(\d{3}-\d{7}-\d{7})\b|order\s*(?:number|no\.?|id|ref(?:erence)?|#)\s*[:#]?\s*#?([A-Z0-9][A-Z0-9-]{3,24})\b|order\s*#\s*([A-Z0-9-]{4,25})\b|#(\d{5,12})\b|transaction id:?\s*(\d{6,})",
     re.I,
 )
 _ORDER_STOP = {"DETAILS", "SUMMARY", "NUMBER", "STATUS", "TOTAL", "DATE", "CONFIRMATION", "HISTORY"}
@@ -276,7 +276,7 @@ def find_window(subject: str, text: str, sent: datetime) -> dict | None:
 
 _QUOTED = (re.compile(r"[\"“]([^\"“”]{3,90})[\"“”]"), re.compile(r"‘(.{3,90})’"))
 _SUBJECT_ITEM = re.compile(
-    r"^\W*(?:order(?:ed| confirmed| delivered)?|shipped|dispatched|delivered|out for delivery|arriving \w+)\s*:\s*(.{3,})", re.I)
+    r"^\W*(?:order(?:ed| confirmed| delivered)?|shipped|dispatched|delivered|out for delivery|arriving \w+)\s*:\s*(.{3,})|^(.{3,}?) - Confirmation needed$", re.I)
 # (anchor before the first item, end of its name). Covers Amazon, Shopify, WooCommerce, Magento and similar shop templates.
 _ITEMS = [(re.compile(a + r"\s*(.{3,200}?)\s*" + b, re.I), multi) for a, b, multi in (
     (r"\*", r"Quantity: \d", True),
@@ -294,7 +294,7 @@ MAX_ITEMS = 5
 def item_title(subject: str) -> str | None:
     for rx in (*_QUOTED, _SUBJECT_ITEM):
         if m := rx.search(subject):
-            return m.group(1).rstrip(".… ")
+            return next(g for g in m.groups() if g).rstrip(".… ")
     return None
 
 

@@ -200,3 +200,23 @@ def test_parcels_the_owner_posts_and_seller_chat_stay_out():
                  "Your parcel AB123456808GB has been dropped off at our Royal Mail Parcel Locker today")]
     [s] = build(bought + sold, now_ms=T0 + 3 * DAY)
     assert s["tracking"][0]["number"] == "AB123456785GB" and not s["exceptions"]
+
+
+def test_vinted_receipts_show_and_parcels_find_their_item():
+    V, EVRI = "Team Vinted <no-reply@vinted.co.uk>", "Evri <do-not-reply@evri.com>"
+    receipt = lambda day, item, tid: mail(day, f'Your receipt for "{item}“', V,
+                                          f"Your payment has been received. Your Vinted purchase receipt: Order {item} Transaction ID {tid}")
+    ms = [receipt(0, "Wool Scarf", 10000000001), receipt(0.01, "Teapot", 10000000002),
+          mail(0.5, "Board game shipping label – use by 20/09/2026", V,
+               "Your shipping label is attached to this message. Tracking code: AB123456785GB Transaction ID: 10000000003"),
+          mail(1, "We're expecting your Vinted parcel", EVRI, "Vinted has your parcel. Tracking number H01HYA0012345601"),
+          mail(1.1, "We're expecting your Vinted parcel", EVRI, "Vinted has your parcel. Tracking number H01HYA0012345602"),
+          mail(3, "We've delivered your Vinted parcel", EVRI, "Tracking number H01HYA0012345601"),
+          mail(3.001, "Teapot - Confirmation needed", V,
+               "Your order has been marked as delivered. If your order wasn't delivered, is damaged, or is not as described")]
+    by_title = {s["title"]: s for s in build(ms, now_ms=T0 + 3 * DAY)}
+    assert set(by_title) == {"Wool Scarf", "Teapot"}  # the sale is left out
+    assert [t["number"] for t in by_title["Teapot"]["tracking"]] == ["H01HYA0012345601"]  # delivered together
+    assert by_title["Teapot"]["status"] == "delivered" and not by_title["Teapot"]["exceptions"]
+    assert [t["number"] for t in by_title["Wool Scarf"]["tracking"]] == ["H01HYA0012345602"]
+    assert by_title["Wool Scarf"]["status"] == "active"
