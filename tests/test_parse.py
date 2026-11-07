@@ -141,6 +141,7 @@ def test_items_from_body(subject, body, items):
     ("Ordered: ‘Bamboo & Walnut...’", "Bamboo & Walnut"),
     ("Order confirmed: Samsung 990 1TB M.2 N...", "Samsung 990 1TB M.2 N"),
     ('Your receipt for "Women’s Medium navy striped linen shirt“', "Women’s Medium navy striped linen shirt"),
+    ("Retro ‘Teapot’ set - Confirmation needed", "Retro ‘Teapot’ set"),
 ])
 def test_item_title_from_subject(subject, title):
     assert item_title(subject) == title

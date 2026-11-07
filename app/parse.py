@@ -278,7 +278,8 @@ def find_window(subject: str, text: str, sent: datetime) -> dict | None:
 
 _QUOTED = (re.compile(r"[\"“]([^\"“”]{3,90})[\"“”]"), re.compile(r"‘(.{3,90})’"))
 _SUBJECT_ITEM = re.compile(
-    r"^\W*(?:order(?:ed| confirmed| delivered)?|shipped|dispatched|delivered|out for delivery|arriving \w+)\s*:\s*(.{3,})|^(.{3,}?) - Confirmation needed$", re.I)
+    r"^\W*(?:order(?:ed| confirmed| delivered)?|shipped|dispatched|delivered|out for delivery|arriving \w+)\s*:\s*(.{3,})", re.I)
+_CONFIRMATION = re.compile(r"^(.{3,}?) - Confirmation needed$")  # Vinted; checked first, item names can hold quotes
 # (anchor before the first item, end of its name). Covers Amazon, Shopify, WooCommerce, Magento and similar shop templates.
 _ITEMS = [(re.compile(a + r"\s*(.{3,200}?)\s*" + b, re.I), multi) for a, b, multi in (
     (r"\*", r"Quantity: \d", True),
@@ -294,7 +295,7 @@ MAX_ITEMS = 5
 
 
 def item_title(subject: str) -> str | None:
-    for rx in (*_QUOTED, _SUBJECT_ITEM):
+    for rx in (_CONFIRMATION, *_QUOTED, _SUBJECT_ITEM):
         if m := rx.search(subject):
             return next(g for g in m.groups() if g).rstrip(".… ")
     return None
