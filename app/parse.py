@@ -37,12 +37,12 @@ _RULES = [
     ("failed_attempt", r"missed you|couldn'?t deliver|could not deliver|unable to deliver|(delivery )?attempt(ed)? (to deliver|delivery|was made)|we tried to deliver|delivery (was )?unsuccessful|not able to deliver"),
     ("action_required", r"(fee|charge|duty|vat|postage) (to pay|is due|owed|outstanding)|pay (the |a )?(fee|charge|duty|customs)|action required|(confirm|update) (your )?address|more postage"),
     ("delayed", r"\bdelay(ed)?\b|running late|taking longer|later than expected|is late\b"),
-    ("delivered", r"^delivered\b|has been delivered|marked as delivered|was delivered|been successfully delivered|we('ve| have) delivered|(?<!be )(?<!not )delivered (to|today|at|in|safely)|left (it |your \w+ )?(in|at|with) (your |a |the )?(safe ?place|porch|neighbou?r|reception|mailbox|letterbox|front door|parcel box)|has arrived\b(?! at)|\bcollected (by you|from)|you('ve| have) collected|successfully collected|now in your hands"),
-    ("ready_for_collection", r"(?<!when it's )(?<!when it is )(?<!when your parcel is )(?<!when your item is )ready (for|to) (collect|pick ?up)|ready for collection|available (for|to) (collect|pick ?up)|waiting (for you )?at (the |your |a )?(parcel ?shop|locker|post office|pickup|collection)|at your (chosen )?(locker|pick ?up point|parcel ?shop)"),
+    ("delivered", r"^delivered\b|has been delivered|marked as delivered|was delivered|been successfully delivered|we('ve| have) delivered|(?<!be )(?<!not )(?<!parcel )delivered (to|today|at|in|safely)|left (it |your \w+ )?(in|at|with) (your |a |the )?(safe ?place|porch|neighbou?r|reception|mailbox|letterbox|front door|parcel box)|has arrived\b(?! at| in)|\bcollected (by you|from)|you('ve| have) collected|successfully collected|now in your hands|package delivered|your package is here"),
+    ("ready_for_collection", r"(?<!when it's )(?<!when it is )(?<!when your parcel is )(?<!when your item is )(ready (for|to)|ready for you to) (collect|pick ?up)|available (for|to) (collect|pick ?up)|waiting (for you )?at (the |your |a )?(parcel ?shop|locker|post office|pickup|collection)|at your (chosen )?(locker|pick ?up point|parcel ?shop)"),
     ("out_for_delivery", r"out for delivery|^arriving today|is (coming|arriving) today|will be (delivered|with you) today|(delivery|arrives?) today|on (its|the) way to you today|with (our|your|the) driver|on the van|(your )?\d+[- ]hour (delivery )?window|driver is (nearby|on (their|the) way)"),
     ("customs", r"\bcustoms\b|\bimport (processing|clearance)"),
-    ("in_transit", r"in transit|on the move|(arrived|reached|departed|left) (at |the |our )?(\w+ )?(hub|depot|facility|sorting|delivery office|distribution)|at (our|the|a) (\w+ )?(hub|depot|sorting)|being sorted|(arriving|delivery|expected) tomorrow"),
-    ("with_carrier", r"(we('ve| have)|has been) (got|received|collected) (your|the) (parcel|package|item)|picked up by|collected by (the )?(courier|carrier|driver)|courier has (received|collected) your|handed (over )?to (the )?(courier|carrier|royal mail|evri|dpd|ups|dhl|yodel|parcelforce)|accepted at|in our network"),
+    ("in_transit", r"in transit|in your country|on the move|(arrived|reached|departed|left) (at |the |our )?(\w+ )?(hub|depot|facility|sorting|delivery office|distribution)|at (our|the|a) (\w+ )?(hub|depot|sorting)|being sorted|(arriving|delivery|expected) tomorrow"),
+    ("with_carrier", r"(we('ve| have)|has been) (got|received|collected) (your|the) (parcel|package|item)|picked up by|collected by (the )?(courier|carrier|driver)|courier has (received|collected) your|handed (over )?to (the )?(courier|carrier|royal mail|evri|dpd|ups|dhl|yodel|parcelforce)|accepted at|in our network|now with (its|the) (postal )?courier"),
     ("dispatched", r"\b(dispatched|despatched|shipped)\b|has been sent|is on (its|the) way|on its way|has left (our|the) (warehouse|store)|we('ve| have) sent"),
     ("label_created", r"label (created|printed)|shipping label|(we('ve| have)|has been) (been )?told|expecting your ([\w&.' ]{1,30} )?(parcel|package|item|order)|parcel loading|had news from|information received|pre-advice|delivery details (received|from)|will be (sent|handed) (to us|over)"),
     ("processing", r"\bpreparing\b|being prepared|\bpacked\b|being packed|(order|item)s? (is |are )?(being )?processed|getting your order ready|ready to ship|order (is )?in progress|shipment plan"),
@@ -60,9 +60,11 @@ CARRIERS = {
     "ups": ("UPS", ("ups.com",), r"\bups\b", "https://www.ups.com/track?tracknum={n}"),
     "dhl": ("DHL", ("dhl.com", "dhl.co.uk", "dhl.de"), r"\bdhl\b", "https://www.dhl.com/gb-en/home/tracking/tracking-parcel.html?submit=1&tracking-id={n}"),
     "fedex": ("FedEx", ("fedex.com",), r"\bfed ?ex\b", "https://www.fedex.com/fedextrack/?trknbr={n}"),
-    "inpost": ("InPost", ("inpost.co.uk", "inpost.pl"), r"\binpost\b", None),
+    "inpost": ("InPost", ("inpost.co.uk", "inpost.pl", "relay.vinted.com"), r"\binpost\b", None),
     "amazon": ("Amazon", ("amazon.co.uk", "amazon.com", "amazon.de", "amazon.fr"), r"amazon logistics", None),
 }
+# Courier emails a seller forwards through the marketplace ("eBay - seller <…@members.ebay.com>"): the shop is the marketplace.
+SELLER_RELAYS = {"members.ebay.com": "eBay"}
 # Senders whose "orders" are payments, food or digital goods, never parcels.
 NON_PARCEL_DOMAINS = {
     "paypal.com", "paypal.co.uk", "deliveroo.co.uk", "deliveroo.com", "just-eat.co.uk", "uber.com",
@@ -318,6 +320,8 @@ _NOT_SHOPS = {"New", "Next", "Latest", "Recent", "Online", "Upcoming", "Parcel",
 
 def merchant_hint(subject: str, sender: str, text: str, carrier: str | None) -> str | None:
     """Which shop a carrier email is about: DPD puts it in the sender name, others say "parcel from X"."""
+    if carrier and domain_of(sender) in SELLER_RELAYS:
+        return SELLER_RELAYS[domain_of(sender)]
     if not carrier or not any(domain_of(sender).endswith(d) for d in CARRIERS[carrier][1]):
         return None
     name = re.sub(r"\s*<.*", "", sender).strip(' "')

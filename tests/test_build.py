@@ -220,3 +220,31 @@ def test_vinted_receipts_show_and_parcels_find_their_item():
     assert by_title["Teapot"]["status"] == "delivered" and not by_title["Teapot"]["exceptions"]
     assert [t["number"] for t in by_title["Wool Scarf"]["tracking"]] == ["H01HYA0012345602"]
     assert by_title["Wool Scarf"]["status"] == "active"
+
+
+def test_couriers_that_name_no_shop_join_the_item_delivered_with_them():
+    V = "Team Vinted <no-reply@vinted.co.uk>"
+    receipt = lambda day, item, tid: mail(day, f'Your receipt for "{item}“', V, f"Vinted purchase receipt Transaction ID {tid}")
+    confirm = lambda day, item: mail(day, f"{item} - Confirmation needed", V, "Your order has been marked as delivered.")
+    ms = [receipt(0, "Wool Scarf", 10000000001), receipt(0.01, "Teapot", 10000000002),
+          mail(1, "Your Royal Mail parcel is on its way", RM, "We've received your parcel. AB123456785GB"),
+          mail(3, "Your parcel has been delivered", RM, "We delivered your parcel today. AB123456785GB"),
+          confirm(3 + 20 / 86400, "Teapot"),
+          mail(1, "Parcel loading...", "InPost via Vinted <shipping@relay.vinted.com>", "Parcel number JJD0001234567890123"),
+          mail(4, "Parcels over & out", "InPost via Vinted <shipping@relay.vinted.com>",
+               "We're happy the parcel is now in your hands! Parcel number JJD0001234567890123"),
+          confirm(4.05, "Wool Scarf")]  # collected an hour before the buyer confirmed
+    by_title = {s["title"]: s for s in build(ms, now_ms=T0 + 5 * DAY)}
+    assert set(by_title) == {"Wool Scarf", "Teapot"}
+    assert [t["number"] for t in by_title["Teapot"]["tracking"]] == ["AB123456785GB"]
+    assert [t["number"] for t in by_title["Wool Scarf"]["tracking"]] == ["JJD0001234567890123"]
+
+
+def test_courier_email_relayed_by_an_ebay_seller_joins_the_order():
+    EBAY, SELLER = "eBay <ebay@ebay.com>", "eBay - seller_123 <0123abcd@members.ebay.com>"
+    ms = [mail(0, "Order confirmed: Desk lamp", EBAY, "Order number: 11-22222-33333"),
+          mail(1, "We're expecting your Northwind parcel", SELLER,
+               "Choosing to have your parcel delivered to a DPD Pickup Point saves CO2. Your parcel: 1550 1234 567 890"),
+          mail(2, "📦PACKAGE DELIVERED: Desk lamp", EBAY, "Your package is here. Order number: 11-22222-33333")]
+    [s] = build(ms, now_ms=T0 + 3 * DAY)
+    assert s["title"] == "Desk lamp" and [t["number"] for t in s["tracking"]] == ["15501234567890"] and s["status"] == "delivered"

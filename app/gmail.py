@@ -84,10 +84,14 @@ def _decode(part) -> str:
     return base64.urlsafe_b64decode(data).decode("utf-8", "replace") if data else ""
 
 
+_CSS_RULE = re.compile(r"[\w-]\s*\{[^{}]*:[^{}]*;")
+
+
 def to_text(payload) -> str:
     plain = " ".join(_decode(p) for p in _walk(payload) if p.get("mimeType") == "text/plain")
     html = " ".join(_decode(p) for p in _walk(payload) if p.get("mimeType") == "text/html")
-    if html and len(plain.strip()) < 200:  # plain parts are often just "view in browser"
+    # plain parts are often just "view in browser", or (InPost via Vinted) a page of CSS before the message
+    if html and (len(plain.strip()) < 200 or len(_CSS_RULE.findall(plain)) >= 3):
         soup = BeautifulSoup(html, "html.parser")
         for t in soup(["style", "script", "head"]):
             t.decompose()

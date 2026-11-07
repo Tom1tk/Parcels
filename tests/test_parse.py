@@ -33,6 +33,12 @@ SENT = datetime(2026, 10, 1, 9, 0)  # a Thursday
     ("Parcel loading...", "As soon as we have it we'll let you know when it's ready to collect", "label_created"),
     ("Parcels over & out", "We're happy your parcel is now in your hands", "delivered"),
     ("Our courier has received your order!", "it will be delivered today", "with_carrier"),
+    ("Package AB123: in your country/region", "Your package has arrived in your country/region.", "in_transit"),
+    ("We're expecting your Northwind parcel", "Choosing to have your parcel delivered to a Pickup Point saves CO2", "label_created"),
+    ("Your request to collect from Corner Shop", "We're expecting your parcel. We'll be in touch when it's ready for collection", "label_created"),
+    ("Your Northwind parcel is ready for you to collect from Corner Shop", "", "ready_for_collection"),
+    ("Your package is now with its courier.", "Let the tracking begin!", "with_carrier"),
+    ("📦PACKAGE DELIVERED: Desk lamp", "Your package is here.", "delivered"),
 ])
 def test_classify(subject, body, stage):
     assert classify(subject, body) == stage
@@ -178,3 +184,14 @@ def test_delivery_window(subject, text, window):
 def test_ready_to_collect_boilerplate_is_not_the_stage():
     body = "Your parcel is due to be delivered today. We'll let you know when your parcel is ready to collect. If we are delivering"
     assert classify("Your parcel from 1. RECORDBARN is due to be delivered today", body) != "ready_for_collection"
+
+
+def test_plain_part_that_is_mostly_css_falls_back_to_html():
+    import base64
+    from app.gmail import to_text
+    part = lambda mime, body: {"mimeType": mime, "body": {"data": base64.urlsafe_b64encode(body.encode()).decode()}}
+    css = " ".join(f".c{i}{{ color: #000; margin: 0; }}" for i in range(50))
+    payload = {"mimeType": "multipart/alternative", "parts": [
+        part("text/plain", css + " Parcel number JJD0001234567890123"),
+        part("text/html", f"<style>{css}</style><p>Parcel number JJD0001234567890123</p>")]}
+    assert to_text(payload) == "Parcel number JJD0001234567890123"

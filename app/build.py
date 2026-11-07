@@ -10,7 +10,7 @@ from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 from statistics import median
 
-from .parse import CARRIERS, EXCEPTIONS, GENERIC_TRACK_URL, STAGES, base_domain, domain_of
+from .parse import CARRIERS, EXCEPTIONS, GENERIC_TRACK_URL, SELLER_RELAYS, STAGES, base_domain, domain_of
 
 TEMPLATE_MIN_SHARE = 0.2   # a stage seen in >=20% of a carrier's shipments becomes a notch
 LEARN_MIN_SHIPMENTS = 3    # an unclassified subject recurring in >=3 shipments becomes a stage
@@ -19,6 +19,7 @@ STALE_DAYS = 21
 GLOBAL_ORDER_LEN = 10      # order numbers this long are unique enough to match across a shop's domains
 HINT_WINDOW_DAYS = 30      # a carrier email can join a shop order placed up to this long before it
 SAME_MOMENT_MS = 15 * 60_000  # Vinted's "confirmation needed" lands seconds after the courier's "delivered"
+UNNAMED_MOMENT_MS = 2 * 60_000  # tighter when the courier email doesn't name the shop at all
 DAY_MS = 86_400_000
 TRANSIT_MIN_SAMPLES = 3     # past deliveries needed before their median becomes an estimate
 HANDED_OVER = ("dispatched", "with_carrier", "in_transit")
@@ -86,37 +87,49 @@ def _attach_hinted(groups: list[list[dict]]) -> list[list[dict]]:
     ponytail: "oldest still waiting" is a guess while several orders from one shop are on their way (four Vinted buys);
     the carrier emails don't say which item is inside. The delivery-moment match corrects it once they land."""
     shops = [(g, _slug(name), _slug(dom), _slug(dom.split(".")[0])) for g in groups for name, dom in [_merchant(g)] if name]
-    out, hinted, claimed = [], [], set()
+    out, hinted, unnamed, claimed = [], [], [], set()
     for g in groups:
         hint = _slug(next((m["facts"]["hint"] or "" for m in g if m["facts"]["hint"]), ""))
-        if len(hint) < 3 or _merchant(g)[0]:
-            out.append(g)
-            continue
         start = g[0]["ts"]
-        hinted.append((g, [sg for sg, name, dom, brand in shops
-                           if (hint in name or name in hint or hint in dom or (len(brand) >= 3 and brand in hint))
-                           and start - HINT_WINDOW_DAYS * DAY_MS <= sg[0]["ts"] <= start]))
+        recent = [s for s in shops if start - HINT_WINDOW_DAYS * DAY_MS <= s[0][0]["ts"] <= start]
+        if _merchant(g)[0]:
+            out.append(g)
+        elif len(hint) >= 3:
+            hinted.append((g, [sg for sg, name, dom, brand in recent
+                               if hint in name or name in hint or hint in dom or (len(brand) >= 3 and brand in hint)]))
+        elif _delivered_at(g):  # Royal Mail never names the shop; only a near-simultaneous "delivered" ties them
+            unnamed.append((g, [sg for sg, *_ in recent if not any(m["facts"]["tracking"] for m in sg)]))
+        else:
+            out.append(g)
 
     def take(g, target):
         claimed.add(id(target))
         target.extend(g)
         target.sort(key=lambda m: m["ts"])
 
-    rest = []
-    for g, match in hinted:
+    def same_moment(g, match, tolerance):
         d = _delivered_at(g)
-        same = [sg for sg in match if d and id(sg) not in claimed and (s := _delivered_at(sg)) and abs(s - d) <= SAME_MOMENT_MS]
-        if same:
-            take(g, same[0])
-        else:
+        gaps = [(abs(s - d), sg) for sg in match if d and id(sg) not in claimed and (s := _delivered_at(sg))]
+        return min((x for x in gaps if x[0] <= tolerance), key=lambda x: x[0], default=(0, None))[1]
+
+    rest = []
+    for g, match, tolerance in sorted([(g, m, SAME_MOMENT_MS) for g, m in hinted] + [(g, m, UNNAMED_MOMENT_MS) for g, m in unnamed],
+                                      key=lambda x: _delivered_at(x[0]) or x[0][0]["ts"]):
+        if sg := same_moment(g, match, tolerance):
+            take(g, sg)
+        elif tolerance == SAME_MOMENT_MS:
             rest.append((g, match))
+        else:
+            out.append(g)
     for g, match in sorted(rest, key=lambda x: x[0][0]["ts"]):
         if not match:
             out.append(g)
             continue
-        free = [sg for sg in match if id(sg) not in claimed and not any(
-            m["facts"]["tracking"] or m["facts"]["stage"] == "delivered" or EXCEPTIONS.get(m["facts"]["stage"], ("", False))[1] for m in sg)]
-        take(g, min(free, key=lambda sg: sg[0]["ts"]) if free else max(match, key=lambda sg: sg[0]["ts"]))
+        free = [sg for sg in match if id(sg) not in claimed and (_delivered_at(sg) or g[0]["ts"] + 1) > g[0]["ts"] and not any(
+            m["facts"]["tracking"] or EXCEPTIONS.get(m["facts"]["stage"], ("", False))[1] for m in sg)]
+        nearest = None if free else same_moment(g, match, HINT_WINDOW_DAYS * DAY_MS)  # collected long before it was confirmed
+        shipped = lambda sg: any(m["ts"] <= g[0]["ts"] and m["facts"]["stage"] in HANDED_OVER for m in sg)  # noqa: E731
+        take(g, min(free, key=lambda sg: (not shipped(sg), sg[0]["ts"])) if free else nearest or max(match, key=lambda sg: sg[0]["ts"]))
     return out
 
 
@@ -152,7 +165,7 @@ def _carrier(msgs, tracking: dict) -> str | None:
 
 
 def _merchant(msgs) -> tuple[str, str]:
-    carrier_doms = {d for _, ds, _, _ in CARRIERS.values() for d in ds} - {d for d in CARRIERS["amazon"][1]}
+    carrier_doms = ({d for _, ds, _, _ in CARRIERS.values() for d in ds} - {d for d in CARRIERS["amazon"][1]}) | set(SELLER_RELAYS)
     for m in msgs:
         dom = domain_of(m["sender"])
         if not any(dom.endswith(d) for d in carrier_doms):
